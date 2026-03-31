@@ -26,6 +26,7 @@ use tools::{execute_tool, mvp_tool_specs};
 const DEFAULT_MODEL: &str = "claude-sonnet-4-20250514";
 const DEFAULT_MAX_TOKENS: u32 = 32;
 const DEFAULT_DATE: &str = "2026-03-31";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() {
     if let Err(error) = run() {
@@ -47,6 +48,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         CliAction::Prompt { prompt, model } => LiveCli::new(model, false)?.run_turn(&prompt)?,
         CliAction::Repl { model } => run_repl(model)?,
         CliAction::Help => print_help(),
+        CliAction::Version => print_version(),
     }
     Ok(())
 }
@@ -71,6 +73,7 @@ enum CliAction {
         model: String,
     },
     Help,
+    Version,
 }
 
 fn parse_args(args: &[String]) -> Result<CliAction, String> {
@@ -103,6 +106,9 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
     }
     if matches!(rest.first().map(String::as_str), Some("--help" | "-h")) {
         return Ok(CliAction::Help);
+    }
+    if matches!(rest.first().map(String::as_str), Some("--version" | "-V")) {
+        return Ok(CliAction::Version);
     }
     if rest.first().map(String::as_str) == Some("--resume") {
         return parse_resume_args(&rest[1..]);
@@ -1400,22 +1406,91 @@ fn convert_messages(messages: &[ConversationMessage]) -> Vec<InputMessage> {
 }
 
 fn print_help() {
-    println!("rusty-claude-cli");
-    println!();
-    println!("Usage:");
-    println!("  rusty-claude-cli [--model MODEL]");
-    println!("      Start interactive REPL");
-    println!("  rusty-claude-cli [--model MODEL] prompt TEXT");
-    println!("      Send one prompt and stream the response");
-    println!("  rusty-claude-cli --resume SESSION.json [/status] [/compact] [...]");
-    println!("      Inspect or maintain a saved session without entering the REPL");
-    println!("  rusty-claude-cli dump-manifests");
-    println!("  rusty-claude-cli bootstrap-plan");
-    println!("  rusty-claude-cli system-prompt [--cwd PATH] [--date YYYY-MM-DD]");
-    println!();
-    println!("Interactive slash commands:");
-    println!("{}", render_slash_command_help());
-    println!();
+    let mut stdout = io::stdout();
+    let _ = print_help_to(&mut stdout);
+}
+
+fn print_help_to(out: &mut impl Write) -> io::Result<()> {
+    writeln!(out, "rusty-claude-cli")?;
+    writeln!(out, "Version: {VERSION}")?;
+    writeln!(out)?;
+    writeln!(
+        out,
+        "Rust-first Claude Code-style CLI for prompt, REPL, and saved-session workflows."
+    )?;
+    writeln!(out)?;
+    writeln!(out, "Usage:")?;
+    writeln!(out, "  rusty-claude-cli [--model MODEL]")?;
+    writeln!(out, "      Start interactive REPL")?;
+    writeln!(out, "  rusty-claude-cli [--model MODEL] prompt TEXT")?;
+    writeln!(out, "      Send one prompt and stream the response")?;
+    writeln!(
+        out,
+        "  rusty-claude-cli --resume SESSION.json [/status] [/compact] [...]"
+    )?;
+    writeln!(
+        out,
+        "      Inspect or maintain a saved session without entering the REPL"
+    )?;
+    writeln!(out, "  rusty-claude-cli dump-manifests")?;
+    writeln!(
+        out,
+        "      Inspect extracted upstream command/tool metadata"
+    )?;
+    writeln!(out, "  rusty-claude-cli bootstrap-plan")?;
+    writeln!(out, "      Print the current bootstrap phase skeleton")?;
+    writeln!(
+        out,
+        "  rusty-claude-cli system-prompt [--cwd PATH] [--date YYYY-MM-DD]"
+    )?;
+    writeln!(
+        out,
+        "      Render the synthesized system prompt for debugging"
+    )?;
+    writeln!(out, "  rusty-claude-cli --help")?;
+    writeln!(out, "  rusty-claude-cli --version")?;
+    writeln!(out)?;
+    writeln!(out, "Options:")?;
+    writeln!(
+        out,
+        "  --model MODEL      Override the active Anthropic model"
+    )?;
+    writeln!(
+        out,
+        "  --resume PATH      Restore a saved session file and optionally run slash commands"
+    )?;
+    writeln!(out, "  -h, --help         Show this help page")?;
+    writeln!(out, "  -V, --version      Print the CLI version")?;
+    writeln!(out)?;
+    writeln!(out, "Environment:")?;
+    writeln!(
+        out,
+        "  ANTHROPIC_AUTH_TOKEN    Preferred bearer token for Anthropic API requests"
+    )?;
+    writeln!(
+        out,
+        "  ANTHROPIC_API_KEY       Legacy API key fallback if auth token is unset"
+    )?;
+    writeln!(
+        out,
+        "  ANTHROPIC_BASE_URL      Override the Anthropic API base URL"
+    )?;
+    writeln!(
+        out,
+        "  ANTHROPIC_MODEL         Default model for selected integration tests"
+    )?;
+    writeln!(
+        out,
+        "  RUSTY_CLAUDE_PERMISSION_MODE  Default permission mode for REPL sessions"
+    )?;
+    writeln!(
+        out,
+        "  CLAUDE_CONFIG_HOME      Override Claude config discovery root"
+    )?;
+    writeln!(out)?;
+    writeln!(out, "Interactive slash commands:")?;
+    writeln!(out, "{}", render_slash_command_help())?;
+    writeln!(out)?;
     let resume_commands = resume_supported_slash_commands()
         .into_iter()
         .map(|spec| match spec.argument_hint {
@@ -1424,10 +1499,26 @@ fn print_help() {
         })
         .collect::<Vec<_>>()
         .join(", ");
-    println!("Resume-safe commands: {resume_commands}");
-    println!("Examples:");
-    println!("  rusty-claude-cli --resume session.json /status /compact /cost");
-    println!("  rusty-claude-cli --resume session.json /memory /config");
+    writeln!(out, "Resume-safe commands: {resume_commands}")?;
+    writeln!(out, "Examples:")?;
+    writeln!(
+        out,
+        "  rusty-claude-cli prompt \"Summarize the repo architecture\""
+    )?;
+    writeln!(out, "  rusty-claude-cli --model claude-sonnet-4-20250514")?;
+    writeln!(
+        out,
+        "  rusty-claude-cli --resume session.json /status /compact /cost"
+    )?;
+    writeln!(
+        out,
+        "  rusty-claude-cli --resume session.json /memory /config"
+    )?;
+    Ok(())
+}
+
+fn print_version() {
+    println!("rusty-claude-cli {VERSION}");
 }
 
 #[cfg(test)]
@@ -1526,10 +1617,32 @@ mod tests {
     }
 
     #[test]
+    fn parses_version_flags() {
+        assert_eq!(
+            parse_args(&["--version".to_string()]).expect("args should parse"),
+            CliAction::Version
+        );
+        assert_eq!(
+            parse_args(&["-V".to_string()]).expect("args should parse"),
+            CliAction::Version
+        );
+    }
+
+    #[test]
     fn shared_help_uses_resume_annotation_copy() {
         let help = commands::render_slash_command_help();
         assert!(help.contains("Slash commands"));
         assert!(help.contains("works with --resume SESSION.json"));
+    }
+
+    #[test]
+    fn cli_help_mentions_version_and_environment() {
+        let mut output = Vec::new();
+        super::print_help_to(&mut output).expect("help should render");
+        let help = String::from_utf8(output).expect("help should be utf8");
+        assert!(help.contains("--version"));
+        assert!(help.contains("ANTHROPIC_AUTH_TOKEN"));
+        assert!(help.contains("RUSTY_CLAUDE_PERMISSION_MODE"));
     }
 
     #[test]
@@ -1547,6 +1660,7 @@ mod tests {
         assert!(help.contains("/memory"));
         assert!(help.contains("/init"));
         assert!(help.contains("/exit"));
+        assert!(help.contains("slash commands"));
     }
 
     #[test]

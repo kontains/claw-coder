@@ -1,54 +1,173 @@
-# Rust port foundation
+# Rusty Claude CLI
 
-This directory contains the first compatibility-first Rust foundation for a drop-in Claude Code CLI replacement.
-
-## Current milestone
-
-This initial milestone focuses on **harness-first scaffolding**, not full feature parity:
-
-- a Cargo workspace aligned to major upstream seams
-- a placeholder CLI crate (`rusty-claude-cli`)
-- runtime, command, and tool registry skeleton crates
-- a `compat-harness` crate that reads the upstream TypeScript sources in `../src/`
-- tests that prove upstream manifests/bootstrap hints can be extracted from the leaked TypeScript codebase
+`rust/` contains the Rust workspace for the integrated `rusty-claude-cli` deliverable.
+It is intended to be something you can clone, build, and run directly.
 
 ## Workspace layout
 
 ```text
 rust/
 ├── Cargo.toml
+├── Cargo.lock
 ├── README.md
-├── crates/
-│   ├── rusty-claude-cli/
-│   ├── runtime/
-│   ├── commands/
-│   ├── tools/
-│   └── compat-harness/
-└── tests/
+└── crates/
+    ├── api/               # Anthropic API client + SSE streaming support
+    ├── commands/          # Shared slash-command metadata/help surfaces
+    ├── compat-harness/    # Upstream TS manifest extraction harness
+    ├── runtime/           # Session/runtime/config/prompt orchestration
+    ├── rusty-claude-cli/  # Main CLI binary
+    └── tools/             # Built-in tool implementations
 ```
 
-## How to use
+## Prerequisites
 
-From this directory:
+- Rust toolchain installed (`rustup`, stable toolchain)
+- Network access and Anthropic credentials for live prompt/REPL usage
+
+## Build
+
+From the repository root:
 
 ```bash
-cargo fmt --all
-cargo check --workspace
-cargo test --workspace
-cargo run -p rusty-claude-cli -- --help
-cargo run -p rusty-claude-cli -- dump-manifests
-cargo run -p rusty-claude-cli -- bootstrap-plan
+cd rust
+cargo build --release -p rusty-claude-cli
 ```
 
-## Design notes
+The optimized binary will be written to:
 
-The shape follows the PRD's harness-first recommendation:
+```bash
+./target/release/rusty-claude-cli
+```
 
-1. Extract observable upstream command/tool/bootstrap facts first.
-2. Keep Rust module boundaries recognizable.
-3. Grow runtime compatibility behind proof artifacts.
-4. Document explicit gaps instead of implying drop-in parity too early.
+## Test
 
-## Relationship to the root README
+Run the verified workspace test suite used for release-readiness:
 
-The repository root README explains the leaked TypeScript codebase. This document tracks the Rust replacement effort that lives in `rust/`.
+```bash
+cd rust
+cargo test --workspace --exclude compat-harness
+```
+
+## Quick start
+
+### Show help
+
+```bash
+cd rust
+cargo run -p rusty-claude-cli -- --help
+```
+
+### Print version
+
+```bash
+cd rust
+cargo run -p rusty-claude-cli -- --version
+```
+
+## Usage examples
+
+### 1) Prompt mode
+
+Send one prompt, stream the answer, then exit:
+
+```bash
+cd rust
+cargo run -p rusty-claude-cli -- prompt "Summarize the architecture of this repository"
+```
+
+Use a specific model:
+
+```bash
+cd rust
+cargo run -p rusty-claude-cli -- --model claude-sonnet-4-20250514 prompt "List the key crates in this workspace"
+```
+
+### 2) REPL mode
+
+Start the interactive shell:
+
+```bash
+cd rust
+cargo run -p rusty-claude-cli --
+```
+
+Inside the REPL, useful commands include:
+
+```text
+/help
+/status
+/model claude-sonnet-4-20250514
+/permissions workspace-write
+/cost
+/compact
+/memory
+/config
+/init
+/exit
+```
+
+### 3) Resume an existing session
+
+Inspect or maintain a saved session file without entering the REPL:
+
+```bash
+cd rust
+cargo run -p rusty-claude-cli -- --resume session.json /status /compact /cost
+```
+
+You can also inspect memory/config state for a restored session:
+
+```bash
+cd rust
+cargo run -p rusty-claude-cli -- --resume session.json /memory /config
+```
+
+## Available commands
+
+### Top-level CLI commands
+
+- `prompt <text...>` — run one prompt non-interactively
+- `--resume <session.json> [/commands...]` — inspect or maintain a saved session
+- `dump-manifests` — print extracted upstream manifest counts
+- `bootstrap-plan` — print the current bootstrap skeleton
+- `system-prompt [--cwd PATH] [--date YYYY-MM-DD]` — render the synthesized system prompt
+- `--help` / `-h` — show CLI help
+- `--version` / `-V` — print the CLI version
+
+### Interactive slash commands
+
+- `/help` — show command help
+- `/status` — show current session status
+- `/compact` — compact local session history
+- `/model [model]` — inspect or switch the active model
+- `/permissions [read-only|workspace-write|danger-full-access]` — inspect or switch permissions
+- `/clear [--confirm]` — clear the current local session
+- `/cost` — show token usage totals
+- `/resume <session-path>` — load a saved session into the REPL
+- `/config [env|hooks|model]` — inspect discovered Claude config
+- `/memory` — inspect loaded instruction memory files
+- `/init` — create a starter `CLAUDE.md`
+- `/exit` — leave the REPL
+
+## Environment variables
+
+### Anthropic/API
+
+- `ANTHROPIC_AUTH_TOKEN` — preferred bearer token for API auth
+- `ANTHROPIC_API_KEY` — legacy API key fallback if auth token is unset
+- `ANTHROPIC_BASE_URL` — override the Anthropic API base URL
+- `ANTHROPIC_MODEL` — default model used by selected live integration tests
+
+### CLI/runtime
+
+- `RUSTY_CLAUDE_PERMISSION_MODE` — default REPL permission mode (`read-only`, `workspace-write`, or `danger-full-access`)
+- `CLAUDE_CONFIG_HOME` — override Claude config discovery root
+- `CLAUDE_CODE_REMOTE` — enable remote-session bootstrap handling when supported
+- `CLAUDE_CODE_REMOTE_SESSION_ID` — remote session identifier when using remote mode
+- `CLAUDE_CODE_UPSTREAM` — override the upstream TS source path for compat-harness extraction
+- `CLAWD_WEB_SEARCH_BASE_URL` — override the built-in web search service endpoint used by tooling
+
+## Notes
+
+- `compat-harness` exists to compare the Rust port against the upstream TypeScript codebase and is intentionally excluded from the requested release test run.
+- The CLI currently focuses on a practical integrated workflow: prompt execution, REPL operation, session inspection/resume, config discovery, and tool/runtime plumbing.
